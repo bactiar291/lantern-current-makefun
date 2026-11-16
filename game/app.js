@@ -1,9 +1,31 @@
-import { createGame, startGame, nextStage, step, createClock, snapshot } from './simulation.js';
+import { createGame, startGame, nextStage, step, createClock, snapshot, tideFactor } from './simulation.js';
+import { loadLogbook, isUnlocked, recordCompletion } from './logbook.js';
 import { STAGES } from './stages.js';
 import { drawRiver } from './render.js';
 import { RiverAudio } from './audio.js';
 const $ = id => document.getElementById(id);
 const state = createGame(), audio = new RiverAudio(), keys = new Set();
+const logbook = loadLogbook();
+const selector = document.createElement('div');
+selector.id = 'chart-selector'; selector.setAttribute('aria-label', 'Single-chart replay');
+$('panel').append(selector);
+const tide = document.createElement('p'); tide.id = 'tide'; tide.className = 'hint';
+$('cargo-note').after(tide);
+function updateLogbook() {
+  selector.replaceChildren();
+  const label = document.createElement('p'); label.textContent = 'Tide Logbook · replay one unlocked chart'; selector.append(label);
+  STAGES.forEach((chart, index) => {
+    const button = document.createElement('button'); button.id = `replay-${index}`;
+    button.disabled = !isUnlocked(logbook, index);
+    button.textContent = `${index + 1}. ${chart.name} · ${logbook.completed[index] ? `Complete · Best ${logbook.bestScores[index]}` : button.disabled ? 'Locked' : 'Unplayed'}`;
+    button.addEventListener('click', () => {
+      if (!isUnlocked(logbook, index)) return;
+      audio.unlock(); startGame(state, index, true); keys.clear(); clock.reset(); previous = performance.now();
+      updateUI(); canvas.focus({preventScroll:true});
+    });
+    selector.append(button);
+  });
+}
 const canvas = $('river'), ctx = canvas.getContext('2d');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let previous = performance.now(), visualTime = 0, shownMode = '', soundTouched = false;
@@ -47,10 +69,13 @@ function updateUI() {
   $('oil').textContent=`${Math.round(state.oil)}%`; $('cargo').textContent=`${state.cargo.length} / 2`;
   $('cargo-note').textContent=state.cargo.length===2?'Full skiff. Slower turns; choose open water.':state.cargo.length?'One light aboard. One seat remains.':'An empty skiff turns quickly.';
   $('score').textContent=String(state.score).padStart(4,'0');
+  const factor = tideFactor(chart, state.elapsed);
+  tide.textContent = `${state.replay ? 'Single-chart replay · ' : ''}${chart.tide ? `${Math.abs(factor) < .05 ? 'Slack tide' : factor > 0 ? 'Flow tide' : 'Ebb tide'} · ${Math.round(Math.abs(factor)*100)}% current · ${chart.tide.period}s cycle` : 'Steady tutorial current'}`;
   $('tip').textContent=state.stage===0?'Ride the arrows out. Take quiet water home.':state.stage===1?'Cut through the reefs, or spend time on the open northern route.':'Two rescue pairs. A shelter between them. Keep enough oil for home.';
   $('message').textContent=state.messageTime>0?state.message:state.cargo.length?'Return to HOME, or risk another pickup. Hold SPACE to dock.':chart.tip;
   if(shownMode===state.mode)return;
   shownMode=state.mode;
+  selector.hidden = !['title','between','won','lost','replayed'].includes(state.mode);
   $('veil').classList.toggle('hidden',state.mode==='play'); $('veil').classList.toggle('center',state.mode!=='title');
   $('pause').textContent=state.mode==='paused'?'Resume · P':'Pause · P';
   $('tutorial').classList.toggle('hidden',state.mode!=='title');
@@ -60,17 +85,24 @@ function updateUI() {
     paused:['THE RIVER CAN WAIT','Chart paused','Your skiff is anchored. Take a breath; the storm waits too.','Resume voyage','WASD / arrows steer · SPACE docks · SHIFT boosts'],
     between:[`CHART ${state.stage+1} COMPLETE`,'The light carries.',`${state.totalSaved} keepers safe so far. Next: ${STAGES[state.stage+1]?.name}. ${STAGES[state.stage+1]?.subtitle}`,'Open next chart',`Rescue score ${state.score} · Hull and oil restored for the next reach`],
     won:['ALL NINE LIGHTS HOME','A brighter shore.',`You brought every keeper through the storm. Nine windows glow along the river tonight.`,'Sail again',`Final rescue score ${state.score} · 3 charts completed · 9 keepers safe`],
+    replayed:['CHART COMPLETE','A light revisited.',`${chart.name}: ${state.saved.length} keepers safe. Single-chart replay complete.`,'Start full voyage',`Chart score ${state.chartScore} · Personal best ${logbook.bestScores[state.stage]}`],
     lost:['VOYAGE ENDED','The river remembers.',`${state.reason} ${state.totalSaved} of 9 keepers reached the lighthouse. Another skiff, another chance.`,'Try again',`Rescue score ${state.score} · Try lighter cargo or stop at a shelter`]
   };
+  if (state.mode === 'lost' && state.replay) modes.lost = ['REPLAY ENDED','The river remembers.',`${state.reason} ${state.saved.length} of ${state.keepers.length} keepers safe on this chart.`,'Start full voyage',`Partial score ${state.chartScore} · No completion recorded`];
+  if (['between','won'].includes(state.mode)) modes[state.mode][4] += ` · This chart ${state.chartScore} · Best ${logbook.bestScores[state.stage]}`;
   const copy=modes[state.mode];if(copy){$('panel-kicker').textContent=copy[0];$('panel-title').textContent=copy[1];$('panel-copy').textContent=copy[2];$('primary').textContent=copy[3];$('panel-foot').textContent=copy[4];}
 }
 function frame(now) {
   const dt=(now-previous)/1000;previous=now;
   if(state.mode==='play')clock.advance(dt);
   if(!reduced && state.mode!=='paused')visualTime+=Math.min(dt,.1);
-  for(const event of state.events)audio.play(event.kind);state.events.length=0;
+  for(const event of state.events) {
+    audio.play(event.kind);
+    if (event.kind === 'stage') { recordCompletion(logbook, event.chart, event.chartScore); updateLogbook(); }
+  }
+  state.events.length=0;
   drawRiver(ctx,state,visualTime,reduced);updateUI();requestAnimationFrame(frame);
 }
 // A detached snapshot is the only diagnostic surface. It cannot mutate the simulation.
 Object.defineProperty(window,'lanternState',{value:()=>snapshot(state),writable:false,configurable:false});
-updateUI();requestAnimationFrame(frame);
+updateLogbook();updateUI();requestAnimationFrame(frame);

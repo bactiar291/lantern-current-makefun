@@ -1,4 +1,5 @@
 import { STAGES, HOME } from './stages.js';
+import { tideFactor } from './simulation.js';
 const INK = '#173f3a', PAPER = '#f3edda', COPPER = '#ad4c2e';
 function path(ctx, points, fill, stroke = INK, width = 2) {
   ctx.beginPath(); points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath();
@@ -35,14 +36,16 @@ function lighthouse(ctx, saved, time, reduced) {
 }
 export function drawRiver(ctx, s, time, reduced = false) {
   const stage = STAGES[s.stage];
+  const tide = tideFactor(stage, s.elapsed);
   ctx.clearRect(0,0,950,550); ctx.fillStyle = '#88b5a7'; ctx.fillRect(0,0,950,550);
   // Deterministic ink marks, not image assets or per-frame randomness.
   for (let i = 0; i < 155; i++) { const x = (i * 137.3) % 950, y = (i * 71.7) % 550; ctx.strokeStyle = i % 3 ? '#6fa394' : '#b3cbb3'; ctx.lineWidth = .7; ctx.beginPath(); ctx.moveTo(x,y); ctx.quadraticCurveTo(x+7,y+3,x+15,y); ctx.stroke(); }
   for (const c of stage.currents) {
     ctx.fillStyle = '#4e8e7e18'; ctx.fillRect(c.x,c.y,c.w,c.h);
     for (let x=c.x+25;x<c.x+c.w;x+=57) for (let y=c.y+24;y<c.y+c.h;y+=41) {
-      ctx.save(); ctx.translate(x,y); ctx.rotate(Math.atan2(c.dy,c.dx));
-      const drift = reduced ? 0 : (time * 10 % 14); ctx.translate(drift,0);
+      ctx.save(); ctx.translate(x,y); ctx.rotate(Math.atan2(c.dy,c.dx) + (tide < 0 ? Math.PI : 0));
+      ctx.scale(Math.abs(tide), 1);
+      const drift = reduced ? 0 : (s.elapsed * 10 % 14); ctx.translate(drift,0);
       ctx.strokeStyle = '#326d6080'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-12,0); ctx.lineTo(12,0); ctx.lineTo(6,-4); ctx.moveTo(12,0); ctx.lineTo(6,4); ctx.stroke(); ctx.restore();
     }
   }

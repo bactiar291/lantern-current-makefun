@@ -20,9 +20,19 @@ Reefs and islands damage the hull, with a recovery interval. There are two seats
 
 ## Source and verification
 
+## Tide Logbook
+
+Full voyage remains the default. The title and results offer native keyboard-accessible buttons to replay one unlocked chart. Completing a chart unlocks the next and records that chart's best completed rescue score locally; partial rescues and losses never earn completion. A replay ends after its selected chart and offers a fresh full voyage. Restart clears cargo and run scores while retaining earned progress.
+
+Charts II and III have deterministic 24-second and 30-second ebb/flow cycles. Arrows reverse and shorten with the actual current; the HUD reports phase and strength. Pause freezes the tide. Chart I keeps its steady tutorial current. Open northern and southern routes remain viable.
+
+The logbook rejects malformed, incompatible, out-of-range and nonsequential saved records. If browser storage is denied, progress remains available for the current page only. Local storage is local to the browser/origin, not a cloud account or tamper-proof record. No new dependencies are required.
+
+## Source and verification details
+
 `game/simulation.js` owns deterministic rules and a capped 60 Hz clock; `stages.js` contains the three authored charts; `render.js` draws the ink chart; `audio.js` synthesizes feedback; `app.js` owns input, menus and accessibility. The read-only `window.lanternState()` returns a detached snapshot for diagnostics; there are no in-game state setters or cheat controls. Reduced motion follows the operating system; DPR is capped at two.
 
-Run `node --test tests/simulation.test.js` with Node 22. Boundary regressions cover storm expiry and fatal home-dock contact taking precedence over same-tick delivery or repair. Browser checks are in `tests/browser.py` and use Python Playwright plus `/snap/bin/chromium`. They operate real keyboard and mouse controls through a complete three-chart voyage, check native button activation and record detached diagnostic snapshots.
+Run `node --test tests/simulation.test.js tests/logbook.test.js` with Node 22. All thirteen original regressions are retained, alongside seven logbook/replay/tide tests. Boundary regressions cover storm expiry and fatal home-dock contact taking precedence over same-tick delivery or repair. Browser checks are in `tests/browser.py` and use Python Playwright plus `/snap/bin/chromium`. They operate real keyboard and mouse controls through a complete three-chart voyage and a single-chart replay, check persisted earned progress after refresh and native button activation, and record detached diagnostic snapshots.
 
     python3 tests/browser.py --artifacts-dir /tmp/lantern-current-browser
     python3 tests/browser.py --artifacts-dir /tmp/lantern-current-verification --no-capture

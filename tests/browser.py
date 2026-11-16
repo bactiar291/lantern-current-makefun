@@ -88,7 +88,7 @@ try:
             assert not state()['cargo']
             report['journey'].append({'event':'delivery','state':state()})
         assert state()['mode']=='title'
-        capture('2-start.jpg')
+        assert page.locator('#replay-1').is_disabled() and page.locator('#replay-2').is_disabled()
         def focused(identifier):
             return page.locator(f'#{identifier}').evaluate('(element) => element === document.activeElement')
         def tab_to(identifier):
@@ -151,7 +151,7 @@ try:
         check('mouse resume restores gameplay focus')
         pickup(0,[(210,160)])
         sail(500,155)
-        capture('1-play.jpg')
+        capture('3-depth.jpg')
         pickup(1,[(680,160),(700,410)])
         home([(660,430),(190,430)])
         assert state()['mode']=='between' and state()['totalSaved']==2
@@ -162,7 +162,8 @@ try:
         pickup(0,[(210,145)])
         pickup(1,[(570,130),(750,150)])
         sail(590,130)
-        capture('3-depth.jpg')
+        assert 'tide' in page.locator('#tide').inner_text()
+        capture('1-play.jpg')
         home([(570,130),(180,145)])
         pickup(2,[(190,490),(745,490)])
         home([(745,490),(190,490)])
@@ -204,6 +205,29 @@ try:
         check('mouse resume and mute')
         page.reload(); advance(100)
         assert state()['mode']=='title'
+        earned = [page.locator(f'#replay-{i}').inner_text() for i in range(3)]
+        assert all('Complete' in text and 'Best' in text for text in earned)
+        assert all(page.locator(f'#replay-{i}').is_enabled() for i in range(3))
+        capture('2-start.jpg')
+        page.locator('#replay-1').click()
+        assert state()['replay'] and state()['stage']==1 and state()['score']==0 and state()['cargo']==[]
+        page.keyboard.press('p'); frozen=state(); advance(13000); assert state()==frozen
+        page.keyboard.press('p')
+        pickup(0,[(210,145)])
+        pickup(1,[(570,130),(750,150)])
+        home([(570,130),(180,145)])
+        pickup(2,[(190,490),(745,490)])
+        home([(745,490),(190,490)])
+        assert state()['mode']=='replayed' and state()['totalSaved']==3
+        assert 'Single-chart replay complete' in page.locator('#panel-copy').inner_text()
+        page.get_by_role('button',name='Start full voyage').click()
+        assert state()['stage']==0 and not state()['replay'] and state()['score']==0 and state()['cargo']==[]
+        check('earned logbook restored; mouse replay completes only one chart; pause freezes tide; full voyage resets')
+        page.reload(); advance(100)
+        page.locator('#replay-2').focus(); page.keyboard.press('Enter')
+        assert state()['stage']==2 and state()['replay'] and focused('river')
+        check('unlocked chart replay supports native keyboard activation')
+        page.reload(); advance(100)
         page.get_by_role('button',name='Cast off').click()
         assert state()['mode']=='play' and focused('river')
         start_x=state()['boat']['x']
@@ -213,8 +237,8 @@ try:
         # Only read detached diagnostics here; snapshot isolation is unit-tested.
         assert not report['errors'], report['errors']
         assert not report['external_requests'], report['external_requests']
-        assert len([e for e in report['journey'] if e['event']=='rescue'])==9
-        assert len([e for e in report['journey'] if e['event']=='delivery'])==5
+        assert len([e for e in report['journey'] if e['event']=='rescue'])==12
+        assert len([e for e in report['journey'] if e['event']=='delivery'])==7
         check('nine rescues, five deliveries, three charts and legitimate win')
         check('zero console/page errors and external requests')
         assert len(report['screenshots'])==(0 if args.no_capture else 4)

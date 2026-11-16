@@ -3,26 +3,36 @@ export const STEP = 1 / 60;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 export function createGame() {
-  return { mode: 'title', stage: 0, score: 0, totalSaved: 0, ticks: 0, events: [], ...stageState(0) };
+  return { mode: 'title', replay: false, stage: 0, score: 0, totalSaved: 0, ticks: 0, events: [], ...stageState(0) };
 }
 function stageState(index) {
   return { boat: { ...HOME, vx: 0, vy: 0, angle: 0 }, remaining: STAGES[index].limit,
-    hull: 4, oil: 100, cargo: [], saved: [], keepers: STAGES[index].keepers.map((k, id) => ({ ...k, id, status: 'waiting' })),
+    hull: 4, oil: 100, cargo: [], saved: [], chartScore: 0, keepers: STAGES[index].keepers.map((k, id) => ({ ...k, id, status: 'waiting' })),
     invulnerable: 0, dockTime: 0, dockTarget: '', repairTime: 0, message: STAGES[index].tip, messageTime: 8, reason: '', elapsed: 0 };
 }
-export function startGame(s) { Object.assign(s, createGame(), { mode: 'play' }); }
+export function startGame(s, stage = 0, replay = false) {
+  if (!Number.isInteger(stage) || stage < 0 || stage >= STAGES.length) return false;
+  Object.assign(s, createGame(), { stage, replay, ...stageState(stage), mode: 'play' });
+  return true;
+}
 export function nextStage(s) {
   if (s.mode !== 'between') return;
   s.stage += 1;
   Object.assign(s, stageState(s.stage), { mode: 'play' });
 }
-function signal(s, kind, text) {
-  s.events.push({ kind, x: s.boat.x, y: s.boat.y });
+function signal(s, kind, text, details = {}) {
+  s.events.push({ kind, x: s.boat.x, y: s.boat.y, ...details });
   s.message = text; s.messageTime = 4;
 }
-export function currentAt(stage, boat) {
+export function tideFactor(stage, elapsed = 0) {
+  if (!stage.tide) return 1;
+  const wave = Math.cos(elapsed / stage.tide.period * Math.PI * 2);
+  return wave * (0.65 + 0.35 * Math.abs(wave));
+}
+export function currentAt(stage, boat, elapsed = 0) {
   let x = 0, y = 0;
-  for (const c of stage.currents) if (boat.x > c.x && boat.x < c.x + c.w && boat.y > c.y && boat.y < c.y + c.h) { x += c.dx; y += c.dy; }
+  const tide = tideFactor(stage, elapsed);
+  for (const c of stage.currents) if (boat.x > c.x && boat.x < c.x + c.w && boat.y > c.y && boat.y < c.y + c.h) { x += c.dx * tide; y += c.dy * tide; }
   return { x, y };
 }
 export function step(s, input = {}, dt = STEP) {
@@ -36,7 +46,7 @@ export function step(s, input = {}, dt = STEP) {
   if (boost) s.oil = Math.max(0, s.oil - 19 * dt);
   const speed = (145 - s.cargo.length * 18) * (boost ? 1.65 : 1) * (anchored ? 0.2 : 1);
   const response = anchored ? 13 : 6 - s.cargo.length * 1.3;
-  const flow = currentAt(stage, b), blend = 1 - Math.exp(-response * dt);
+  const flow = currentAt(stage, b, s.elapsed), blend = 1 - Math.exp(-response * dt);
   b.vx += (x * speed + flow.x * (anchored ? 0.07 : 1) - b.vx) * blend;
   b.vy += (y * speed + flow.y * (anchored ? 0.07 : 1) - b.vy) * blend;
   b.x = clamp(b.x + b.vx * dt, 20, 930); b.y = clamp(b.y + b.vy * dt, 30, 520);
@@ -70,13 +80,13 @@ export function step(s, input = {}, dt = STEP) {
     }
     if (s.dockTime >= 0.65) {
       if (atHome && s.cargo.length) {
-        const count = s.cargo.length; s.saved.push(...s.cargo); s.totalSaved += count; s.score += count * 100;
+        const count = s.cargo.length; s.saved.push(...s.cargo); s.totalSaved += count; s.score += count * 100; s.chartScore += count * 100;
         for (const id of s.cargo) s.keepers[id].status = 'saved';
         s.cargo = []; signal(s, 'delivery', `${count} ${count === 1 ? 'light' : 'lights'} home. The lighthouse burns brighter.`);
         if (s.saved.length === s.keepers.length) {
-          s.score += Math.floor(s.remaining) * 2 + s.hull * 25;
-          s.mode = s.stage === STAGES.length - 1 ? 'won' : 'between';
-          signal(s, 'stage', s.mode === 'won' ? 'Every light is home.' : 'This reach is safe. A new chart awaits.');
+          const bonus = Math.floor(s.remaining) * 2 + s.hull * 25; s.score += bonus; s.chartScore += bonus;
+          s.mode = s.replay ? 'replayed' : s.stage === STAGES.length - 1 ? 'won' : 'between';
+          signal(s, 'stage', s.replay ? 'Single-chart replay complete.' : s.mode === 'won' ? 'Every light is home.' : 'This reach is safe. A new chart awaits.', { chart: s.stage, chartScore: s.chartScore });
         }
       } else if (keeper && s.cargo.length < 2) {
         keeper.status = 'aboard'; s.cargo.push(keeper.id); s.dockTime = 0;
