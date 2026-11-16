@@ -1,0 +1,47 @@
+# Local evidence, logs, session records and caches are not game source.
+node_modules/
+__pycache__/
+*.pyc
+.cache/
+.pytest_cache/
+playwright-report/
+browser-artifacts/
+test-results/
+reports/
+logs/
+*.log
+transcripts/
+*transcript*.json*
+*session*.json*
+TASK*.md
+*brief*.md
+out/
+output/
+.DS_Store
+
+# Environment secrets, credentials and private signing material.
+.env
+.env.*
+*keypair*
+*credential*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+
+# Native SQLite stores and their journals / shared-memory files.
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+
+# Archived native transcripts (including compressed tar variants).
+*transcript*.tar
+*transcript*.tar.*
+*transcript*.tgz
+*transcript*.tbz2
+*transcript*.txz
