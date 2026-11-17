@@ -2,19 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Lantern Current — a river rescue</title>
+<title>Lantern Current: Storm Atlas</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div id="app">
-<header><div class="brand"><span class="seal">☼</span><div><h1>Lantern Current</h1><p>A PAPER SKIFF · NINE LIGHTS · ONE WAY HOME</p></div></div><nav><button id="sound" aria-pressed="false">Sound off · M</button><button id="pause">Pause · P</button></nav></header>
+<header><div class="brand"><span class="seal">☼</span><div><h1>Lantern Current <em>Storm Atlas</em></h1><p>A PAPER SKIFF · SIX CHARTS · EVERY LIGHT MATTERS</p></div></div><nav><button id="sound" aria-pressed="false">Sound off · M</button><button id="pause">Pause · P</button></nav></header>
 <main>
 <section class="chart" aria-label="River chart"><div class="chart-heading"><span id="chart-number">CHART I / III</span><span id="chart-name">The Reedwater</span><span>N ↑</span></div><canvas id="river" width="950" height="550" tabindex="0" aria-label="River rescue map. Use arrows or WASD to steer, Space to dock and Shift to boost."></canvas><div id="message" role="status">Bring the stranded lantern keepers home.</div><div class="legend"><span><i class="keeper"></i> Keeper</span><span><i class="shelter"></i> Shelter</span><span><i class="reef"></i> Reef</span><span>→ Current</span></div></section>
 <aside><div class="eyebrow">LIGHTHOUSE LOG</div><h2 id="objective">Bring the lights<br>home.</h2><div id="saved" class="big-stat">0 / 2 <small>safe ashore</small></div><div class="rule"></div><div class="meter-label"><span>Storm approaching</span><strong id="time">110s</strong></div><div class="meter"><div id="storm-fill"></div></div><p class="hint">Finish this chart before the river closes.</p><div class="resources"><div><span>Paper hull</span><strong id="hull">◆ ◆ ◆ ◆</strong></div><div><span>Copper oil</span><strong id="oil">100%</strong></div><div><span>On board</span><strong id="cargo">0 / 2</strong></div></div><p id="cargo-note" class="hint">An empty skiff turns quickly.</p><div class="rule"></div><div class="meter-label"><span>Rescue score</span><strong id="score">0000</strong></div><div class="field-note"><span>RIVER WISDOM</span><p id="tip">Ride the arrows out. Take quiet water home.</p></div></aside>
 </main>
-<footer><span><kbd>W A S D</kbd> / <kbd>↑ ↓ ← →</kbd> Steer</span><span><kbd>SPACE</kbd> Hold to rescue / dock</span><span><kbd>SHIFT</kbd> Burn oil to boost</span><span><kbd>P</kbd> Pause</span></footer>
-<div id="veil"><section id="panel" class="paper" aria-labelledby="panel-title"><div id="panel-kicker" class="eyebrow">A SMALL TALE OF RIVER RESCUE</div><h2 id="panel-title">Carry a little<br>light.</h2><p id="panel-copy">The storm is coming. Nine lantern keepers are waiting among the islands. Your paper-and-copper skiff is their way home.</p><div id="tutorial"><p><b>01</b><span>Steer with <strong>WASD or arrows.</strong><br>Water arrows push your skiff.</span></p><p><b>02</b><span>Hold <strong>SPACE</strong> by a keeper to board.<br>Hold it at the lighthouse to deliver.</span></p><p><b>03</b><span>Two seats. Heavy cargo steers slowly.<br><strong>SHIFT</strong> boosts; shelters refill and repair.</span></p></div><button id="primary" class="primary">Cast off <span>↗</span></button><p id="panel-foot">Three charts. Every light matters.</p></section></div>
+<p id="signal-note" hidden></p>
+<footer><span><kbd>W A S D</kbd> / <kbd>↑ ↓ ← →</kbd> Steer</span><span><kbd>SPACE</kbd> Hold to rescue / dock / light signal</span><span><kbd>SHIFT</kbd> Burn oil to boost</span><span><kbd>P</kbd> Pause</span></footer>
+<div id="veil"><section id="panel" class="paper" aria-labelledby="panel-title"><div id="panel-kicker" class="eyebrow">LANTERN CURRENT / STORM ATLAS</div><h2 id="panel-title">Carry a little<br>light.</h2><p id="panel-copy">Nine keepers await on the Reedwater. Bring them home to open Storm Atlas: three harder charts, drifting timber and forgotten signal posts.</p><div id="tutorial"><p><b>01</b><span>Steer with <strong>WASD or arrows.</strong><br>Water arrows push your skiff.</span></p><p><b>02</b><span>Hold <strong>SPACE</strong> by a keeper to board.<br>Hold it at the lighthouse to deliver.</span></p><p><b>03</b><span>Two seats. Heavy cargo steers slowly.<br><strong>SHIFT</strong> boosts; shelters refill and repair.</span></p></div><button id="primary" class="primary">Cast off <span>↗</span></button><p id="panel-foot">Start the Reedwater voyage · 3 charts / 9 keepers</p></section></div>
 </div>
 <script type="module" src="app.js"></script>
 </body></html>

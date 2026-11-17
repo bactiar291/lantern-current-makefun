@@ -1,5 +1,6 @@
 import { STAGES, HOME } from './stages.js';
 import { tideFactor } from './simulation.js';
+import { driftwoodAt } from './hazards.js';
 const INK = '#173f3a', PAPER = '#f3edda', COPPER = '#ad4c2e';
 function path(ctx, points, fill, stroke = INK, width = 2) {
   ctx.beginPath(); points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath();
@@ -49,13 +50,37 @@ export function drawRiver(ctx, s, time, reduced = false) {
       ctx.strokeStyle = '#326d6080'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-12,0); ctx.lineTo(12,0); ctx.lineTo(6,-4); ctx.moveTo(12,0); ctx.lineTo(6,4); ctx.stroke(); ctx.restore();
     }
   }
-  text(ctx, 'R E E D W A T E R   A R C H I P E L A G O', 481, 36, 10, '#386c5d');
+  text(ctx, s.stage<3?'R E E D W A T E R   A R C H I P E L A G O':'S T O R M   A T L A S   /   U N C H A R T E D   R E A C H E S', 481, 36, 10, '#386c5d');
+  for(const lane of stage.driftwood || []) {
+    const h=driftwoodAt(lane,s.elapsed);
+    ctx.save();ctx.strokeStyle=h.phase==='warning'?COPPER:'#6b574e70';ctx.lineWidth=h.phase==='warning'?2:1;
+    ctx.setLineDash([6,7]);ctx.beginPath();ctx.moveTo(lane.from.x,lane.from.y);ctx.lineTo(lane.to.x,lane.to.y);ctx.stroke();ctx.setLineDash([]);
+    if(h.phase==='warning') {
+      circle(ctx,lane.from.x,lane.from.y,22,'#f3edda99',COPPER);
+      text(ctx,`! ${Math.ceil(h.countdown)}s`,lane.from.x,lane.from.y+4,11,COPPER);
+    }
+    if(h.solid) {
+      ctx.translate(h.x,h.y);ctx.rotate(h.angle);
+      ctx.strokeStyle='#e4e5c0';ctx.beginPath();ctx.moveTo(-28,-12);ctx.lineTo(-38,0);ctx.lineTo(-28,12);ctx.stroke();
+      path(ctx,[[-19,-8],[15,-9],[23,-2],[18,8],[-16,9],[-22,2]],'#916447',INK,2);
+      ctx.strokeStyle='#d7b58a';ctx.beginPath();ctx.moveTo(-14,-3);ctx.lineTo(14,-3);ctx.moveTo(-10,3);ctx.lineTo(18,3);ctx.stroke();
+    }
+    ctx.restore();
+  }
   for (const [i, o] of stage.islands.entries()) island(ctx,o.x,o.y,o.r,i+2);
   for (const r of stage.reefs) {
     ctx.strokeStyle = '#3c716566'; ctx.setLineDash([3,5]); ctx.beginPath(); ctx.ellipse(r.x,r.y,r.r+9,r.r*.73+7,0,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
     for (let i=0;i<3;i++) { const x=r.x+(i-1)*16,y=r.y+Math.sin(i*2)*10; path(ctx,[[x-12,y+8],[x-3,y-13],[x+6,y-8],[x+12,y+9]], '#667e70'); path(ctx,[[x-3,y-13],[x+1,y+3],[x+12,y+9]], '#819081',null); }
   }
   lighthouse(ctx,s.totalSaved,time,reduced);
+  for(const [id,p] of (stage.beacons || []).entries()) {
+    const lit=s.litBeacons.includes(id);
+    circle(ctx,p.x,p.y,28,lit?'#f9df8c77':'#e9e2c144',lit?COPPER:'#617365');
+    path(ctx,[[p.x-12,p.y+10],[p.x+12,p.y+10],[p.x+8,p.y+17],[p.x-8,p.y+17]],'#b8895f');
+    ctx.fillStyle=INK;ctx.fillRect(p.x-2,p.y-17,4,28);
+    if(lit)lantern(ctx,p.x,p.y-20,1.3);else {circle(ctx,p.x,p.y-20,7,'#c6bd9c',INK);}
+    text(ctx,lit?'SIGNAL LIT':'SIGNAL · 20 OIL',p.x,p.y+39,9,lit?COPPER:INK);
+  }
   for (const d of stage.docks) {
     circle(ctx,d.x,d.y,36,'#e4e0bd44');
     path(ctx,[[d.x-21,d.y-13],[d.x+21,d.y-13],[d.x+21,d.y+12],[d.x-21,d.y+12]], '#b8895f');
@@ -81,7 +106,7 @@ export function drawRiver(ctx, s, time, reduced = false) {
   ctx.strokeStyle=COPPER;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-7,-10);ctx.lineTo(-7,10);ctx.stroke();
   circle(ctx,3,0,4,INK); for(let i=0;i<s.cargo.length;i++) lantern(ctx,-13+i*11,0,.6);
   ctx.restore();
-  if(s.dockTarget){ctx.strokeStyle=COPPER;ctx.lineWidth=3;ctx.beginPath();ctx.arc(b.x,b.y,32,-Math.PI/2,-Math.PI/2+Math.PI*2*Math.min(1,s.dockTime/.65));ctx.stroke(); text(ctx,'HOLD SPACE',b.x,b.y+48,9);}
+  if(s.dockTarget){ctx.strokeStyle=COPPER;ctx.lineWidth=3;ctx.beginPath();ctx.arc(b.x,b.y,32,-Math.PI/2,-Math.PI/2+Math.PI*2*Math.min(1,s.dockTime/(s.dockTarget.startsWith('beacon')?1.2:.65)));ctx.stroke(); text(ctx,'HOLD SPACE',b.x,b.y+48,9);}
   // A chartmaker's compass and scale keep the sea feeling like a physical map.
   ctx.save();ctx.translate(891,477);path(ctx,[[0,-25],[5,-4],[0,0],[-5,4]],PAPER);path(ctx,[[0,25],[-5,4],[0,0],[5,-4]],INK);text(ctx,'N',0,-33,10);ctx.restore();
   text(ctx,'0 ───── 100 river lengths',150,520,9,'#386c5d');

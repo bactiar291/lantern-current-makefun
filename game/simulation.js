@@ -1,18 +1,20 @@
-import { STAGES, HOME } from './stages.js';
+import { STAGES, HOME, VOYAGES } from './stages.js';
+import { hazardsAt } from './hazards.js';
 export const STEP = 1 / 60;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 export function createGame() {
-  return { mode: 'title', replay: false, stage: 0, score: 0, totalSaved: 0, ticks: 0, events: [], ...stageState(0) };
+  return { mode: 'title', replay: false, voyage: 0, stage: 0, score: 0, totalSaved: 0, ticks: 0, events: [], ...stageState(0) };
 }
 function stageState(index) {
   return { boat: { ...HOME, vx: 0, vy: 0, angle: 0 }, remaining: STAGES[index].limit,
     hull: 4, oil: 100, cargo: [], saved: [], chartScore: 0, keepers: STAGES[index].keepers.map((k, id) => ({ ...k, id, status: 'waiting' })),
-    invulnerable: 0, dockTime: 0, dockTarget: '', repairTime: 0, message: STAGES[index].tip, messageTime: 8, reason: '', elapsed: 0 };
+    invulnerable: 0, dockTime: 0, dockTarget: '', repairTime: 0, hits: 0, litBeacons: [], medal: 0,
+    message: STAGES[index].tip, messageTime: 8, reason: '', elapsed: 0 };
 }
 export function startGame(s, stage = 0, replay = false) {
   if (!Number.isInteger(stage) || stage < 0 || stage >= STAGES.length) return false;
-  Object.assign(s, createGame(), { stage, replay, ...stageState(stage), mode: 'play' });
+  Object.assign(s, createGame(), { stage, replay, voyage: stage >= 3 ? 1 : 0, ...stageState(stage), mode: 'play' });
   return true;
 }
 export function nextStage(s) {
@@ -51,13 +53,13 @@ export function step(s, input = {}, dt = STEP) {
   b.vy += (y * speed + flow.y * (anchored ? 0.07 : 1) - b.vy) * blend;
   b.x = clamp(b.x + b.vx * dt, 20, 930); b.y = clamp(b.y + b.vy * dt, 30, 520);
   if (Math.hypot(b.vx, b.vy) > 8) b.angle = Math.atan2(b.vy, b.vx);
-  for (const obstacle of [...stage.islands, { x: 63, y: 224, r: 43 }, ...stage.reefs]) {
+  for (const obstacle of [...stage.islands, { x: 63, y: 224, r: 43 }, ...stage.reefs, ...hazardsAt(stage,s.elapsed).filter(h=>h.solid)]) {
     const d = distance(b, obstacle), radius = obstacle.r + 12;
     if (d < radius) {
       const nx = d ? (b.x - obstacle.x) / d : 1, ny = d ? (b.y - obstacle.y) / d : 0;
       b.x = obstacle.x + nx * radius; b.y = obstacle.y + ny * radius;
       b.vx = nx * 35; b.vy = ny * 35;
-      if (s.invulnerable === 0) { s.hull--; s.invulnerable = 1.5; signal(s, 'damage', 'Hull struck! Hold SPACE at a shelter to repair.'); }
+      if (s.invulnerable === 0) { s.hull--; s.hits++; s.invulnerable = 1.5; signal(s, 'damage', 'Hull struck! Hold SPACE at a shelter to repair.'); }
     }
   }
   // Loss takes precedence over same-tick repair, delivery and chart completion.
@@ -69,11 +71,18 @@ export function step(s, input = {}, dt = STEP) {
   const keeper = s.keepers.find(k => k.status === 'waiting' && distance(b, k) < 38);
   const atHome = distance(b, HOME) < 43;
   const dock = stage.docks.find(d => distance(b, d) < 40);
-  const target = atHome ? 'home' : dock ? 'dock' : keeper ? `keeper${keeper.id}` : '';
+  const beacon = (stage.beacons || []).findIndex((p,i)=>!s.litBeacons.includes(i) && distance(b,p)<34);
+  const target = atHome ? 'home' : dock ? 'dock' : keeper ? `keeper${keeper.id}` : beacon >= 0 ? `beacon${beacon}` : '';
   if (target !== s.dockTarget || !anchored) s.dockTime = 0;
   s.dockTarget = target;
   if (anchored && target) {
     s.dockTime += dt;
+    if (beacon >= 0 && target === `beacon${beacon}` && s.dockTime >= 1.2) {
+      if (s.oil >= 20) {
+        s.oil -= 20; s.litBeacons.push(beacon); s.dockTime = 0;
+        signal(s,'beacon',`${stage.beacons[beacon].name} lit. Finish the rescue to earn your signal medal.`);
+      } else { s.message='Signal needs 20% oil. Refill at a shelter.'; s.messageTime=2; }
+    }
     if (atHome || dock) {
       s.oil = Math.min(100, s.oil + 30 * dt); s.repairTime += dt;
       if (s.repairTime >= 1.5) { s.repairTime = 0; if (s.hull < 4) { s.hull++; signal(s, 'repair', 'Copper patched. Ready for the river.'); } }
@@ -84,9 +93,10 @@ export function step(s, input = {}, dt = STEP) {
         for (const id of s.cargo) s.keepers[id].status = 'saved';
         s.cargo = []; signal(s, 'delivery', `${count} ${count === 1 ? 'light' : 'lights'} home. The lighthouse burns brighter.`);
         if (s.saved.length === s.keepers.length) {
-          const bonus = Math.floor(s.remaining) * 2 + s.hull * 25; s.score += bonus; s.chartScore += bonus;
-          s.mode = s.replay ? 'replayed' : s.stage === STAGES.length - 1 ? 'won' : 'between';
-          signal(s, 'stage', s.replay ? 'Single-chart replay complete.' : s.mode === 'won' ? 'Every light is home.' : 'This reach is safe. A new chart awaits.', { chart: s.stage, chartScore: s.chartScore });
+          s.medal = stage.beacons && s.litBeacons.length === stage.beacons.length ? (s.hits === 0 ? 2 : 1) : 0;
+          const bonus = Math.floor(s.remaining) * 2 + s.hull * 25 + s.medal * 100; s.score += bonus; s.chartScore += bonus;
+          s.mode = s.replay ? 'replayed' : s.stage === VOYAGES[s.voyage].last ? 'won' : 'between';
+          signal(s, 'stage', s.replay ? 'Single-chart replay complete.' : s.mode === 'won' ? 'Every light is home.' : 'This reach is safe. A new chart awaits.', { chart: s.stage, chartScore: s.chartScore, medal:s.medal });
         }
       } else if (keeper && s.cargo.length < 2) {
         keeper.status = 'aboard'; s.cargo.push(keeper.id); s.dockTime = 0;

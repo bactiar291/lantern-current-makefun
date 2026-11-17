@@ -5,6 +5,10 @@ import json
 import os
 from pathlib import Path
 import threading
+import fcntl
+
+verification_lock = open('/tmp/makefun/campaign-20261117/verification.lock', 'a')
+fcntl.flock(verification_lock, fcntl.LOCK_EX)
 
 from typing import Any
 from playwright.sync_api import sync_playwright
@@ -31,6 +35,7 @@ try:
         page.on('pageerror', lambda error: report['errors'].append(str(error)))
         page.on('console', lambda msg: report['errors'].append(msg.text) if msg.type == 'error' else None)
         page.on('request', lambda req: report['external_requests'].append(req.url) if not req.url.startswith(('http://127.0.0.1:', 'data:')) else None)
+        page.route('**/*', lambda route: route.continue_() if route.request.url.startswith(f'http://127.0.0.1:{server.server_port}/') else route.abort())
         page.clock.install(time=0)
         page.goto(f'http://127.0.0.1:{server.server_port}/')
         page.wait_for_function('typeof window.lanternState === "function"')
