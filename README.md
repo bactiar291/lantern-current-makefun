@@ -16,7 +16,7 @@ Serve `game/` with any static HTTP server, for example `python3 -m http.server 8
 - P: pause/resume. Losing focus pauses automatically.
 - M: mute. Buttons support mouse and native Enter/Space activation. Tab selects controls; starting or resuming focuses the map for gameplay. Menu actions receive focus when a chart ends or play pauses.
 
-Reefs and islands damage the hull, with a recovery interval. There are two seats; keepers must be delivered before the next pickup when full. Each delivery scores 100 per keeper. Clearing a chart adds twice the remaining whole seconds and 25 per hull point. Oil and hull reset between charts. All three charts complete the voyage; storm expiry or hull failure ends it. Restart is immediate.
+Reefs and islands damage the hull, with a recovery interval. There are two seats; keepers must be delivered before the next pickup when full. Each delivery scores 100 per keeper. Clearing a chart adds twice the remaining whole seconds and 25 per hull point. Oil and hull reset between charts. After all nine keepers are delivered, face the Bell-Maw: dodge its announced surge lane, close within flare range, and press F during recovery to break one of five seals per cycle. Breaking all five wins the voyage; storm expiry, the final tide timer, or hull failure ends it. Restart is immediate.
 
 ## Source and verification
 

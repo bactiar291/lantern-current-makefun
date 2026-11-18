@@ -8,7 +8,8 @@ export function createGame() {
 function stageState(index) {
   return { boat: { ...HOME, vx: 0, vy: 0, angle: 0 }, remaining: STAGES[index].limit,
     hull: 4, oil: 100, cargo: [], saved: [], keepers: STAGES[index].keepers.map((k, id) => ({ ...k, id, status: 'waiting' })),
-    invulnerable: 0, dockTime: 0, dockTarget: '', repairTime: 0, message: STAGES[index].tip, messageTime: 8, reason: '', elapsed: 0 };
+    invulnerable: 0, dockTime: 0, dockTarget: '', repairTime: 0, message: STAGES[index].tip, messageTime: 8, reason: '', elapsed: 0,
+    boss: null, flareCooldown: 0, flareWasDown: false, flareShot: null, resumeMode: 'play' };
 }
 export function startGame(s) { Object.assign(s, createGame(), { mode: 'play' }); }
 export function nextStage(s) {
@@ -25,11 +26,8 @@ export function currentAt(stage, boat) {
   for (const c of stage.currents) if (boat.x > c.x && boat.x < c.x + c.w && boat.y > c.y && boat.y < c.y + c.h) { x += c.dx; y += c.dy; }
   return { x, y };
 }
-export function step(s, input = {}, dt = STEP) {
-  if (s.mode !== 'play') return;
+function moveSkiff(s, input, dt, hazards = true) {
   const stage = STAGES[s.stage], b = s.boat;
-  s.ticks++; s.elapsed += dt; s.remaining = Math.max(0, s.remaining - dt);
-  s.invulnerable = Math.max(0, s.invulnerable - dt); s.messageTime = Math.max(0, s.messageTime - dt);
   let x = input.x || 0, y = input.y || 0;
   const length = Math.hypot(x, y); if (length > 1) { x /= length; y /= length; }
   const anchored = !!input.anchor, boost = !!input.boost && s.oil > 0 && length > 0 && !anchored;
@@ -41,7 +39,7 @@ export function step(s, input = {}, dt = STEP) {
   b.vy += (y * speed + flow.y * (anchored ? 0.07 : 1) - b.vy) * blend;
   b.x = clamp(b.x + b.vx * dt, 20, 930); b.y = clamp(b.y + b.vy * dt, 30, 520);
   if (Math.hypot(b.vx, b.vy) > 8) b.angle = Math.atan2(b.vy, b.vx);
-  for (const obstacle of [...stage.islands, { x: 63, y: 224, r: 43 }, ...stage.reefs]) {
+  for (const obstacle of hazards ? [...stage.islands, { x: 63, y: 224, r: 43 }, ...stage.reefs] : []) {
     const d = distance(b, obstacle), radius = obstacle.r + 12;
     if (d < radius) {
       const nx = d ? (b.x - obstacle.x) / d : 1, ny = d ? (b.y - obstacle.y) / d : 0;
@@ -50,6 +48,71 @@ export function step(s, input = {}, dt = STEP) {
       if (s.invulnerable === 0) { s.hull--; s.invulnerable = 1.5; signal(s, 'damage', 'Hull struck! Hold SPACE at a shelter to repair.'); }
     }
   }
+}
+export function startBoss(s) {
+  if (s.mode !== 'play' || s.stage !== STAGES.length - 1 || s.saved.length !== s.keepers.length) return;
+  s.boss = { x: 720, y: 275, hp: 5, maxHp: 5, phase: 'tell', phaseTime: 1.35, laneY: s.boat.y, hitChecked: false, sealHit: false, remaining: 52 };
+  s.mode = 'bossIntro';
+  signal(s, 'boss', 'The river goes still. Something vast is circling below.');
+}
+function bossPhase(s, phase) {
+  const b = s.boss;
+  b.phase = phase; b.hitChecked = false;
+  b.phaseTime = phase === 'tell' ? (b.hp <= 2 ? 1.05 : 1.35) : phase === 'surge' ? .82 : 2.05;
+  if (phase === 'tell') { b.laneY = clamp(s.boat.y, 105, 455); signal(s, 'tell', 'Red water! Leave the marked lane.'); }
+  if (phase === 'surge') signal(s, 'surge', 'THE SURGE! Keep clear of the red water.');
+  if (phase === 'recover') { b.sealHit = false; signal(s, 'recover', 'The leviathan is exposed. Close in and press F.'); }
+}
+function stepBoss(s, input, dt) {
+  const b = s.boss, boat = s.boat;
+  s.ticks++; s.elapsed += dt; b.remaining = Math.max(0, b.remaining - dt);
+  s.invulnerable = Math.max(0, s.invulnerable - dt); s.messageTime = Math.max(0, s.messageTime - dt);
+  s.flareCooldown = Math.max(0, s.flareCooldown - dt);
+  const firing = !!input.flare && !s.flareWasDown;
+  s.flareWasDown = !!input.flare;
+  moveSkiff(s, { ...input, anchor: false }, dt, false);
+  if (s.hull <= 0 || b.remaining <= 0) {
+    s.mode = 'lost'; s.reason = s.hull <= 0 ? 'The leviathan dragged the paper skiff under.' : 'The last tide swallowed the skiff.';
+    signal(s, 'lost', s.reason); return;
+  }
+  if (b.phase === 'surge' && !b.hitChecked && b.phaseTime <= .35) {
+    b.hitChecked = true;
+    if (Math.abs(boat.y - b.laneY) < 48 && s.invulnerable === 0) {
+      s.hull--; s.invulnerable = 1.45; signal(s, 'damage', 'The surge clips the skiff. Leave the red lane next time.');
+      if (s.hull <= 0) { s.mode = 'lost'; s.reason = 'The leviathan dragged the paper skiff under.'; signal(s, 'lost', s.reason); return; }
+    }
+  }
+  if (firing && s.flareCooldown === 0 && !s.flareShot) {
+    s.flareCooldown = .72;
+    const dx = b.x + 70 - boat.x, dy = b.y - 5 - boat.y, length = Math.hypot(dx, dy) || 1;
+    s.flareShot = { x: boat.x, y: boat.y, vx: dx / length * 440, vy: dy / length * 440, life: 1.45 };
+    signal(s, 'fire', 'Resonance flare away.');
+  }
+  if (s.flareShot) {
+    const shot = s.flareShot;
+    shot.x += shot.vx * dt; shot.y += shot.vy * dt; shot.life -= dt;
+    if (distance(shot, { x: b.x + 70, y: b.y - 5 }) < 19) {
+      s.flareShot = null;
+      if (b.phase === 'recover' && !b.sealHit) {
+        b.hp--; b.sealHit = true; signal(s, 'bossHit', `Resonance flare! ${b.hp} seals remain.`);
+        if (b.hp <= 0) {
+          s.score += Math.floor(b.remaining) * 2 + s.hull * 25;
+          s.mode = 'won'; signal(s, 'victory', 'The leviathan breaks the surface. Every lantern shines.'); return;
+        }
+      } else { s.message = 'The shell turned the flare aside. Fire during recovery.'; s.messageTime = 1.2; }
+    } else if (shot.life <= 0 || shot.x > 950 || shot.y < 0 || shot.y > 550) s.flareShot = null;
+  }
+  b.phaseTime -= dt;
+  if (b.phaseTime <= 0) bossPhase(s, b.phase === 'tell' ? 'surge' : b.phase === 'surge' ? 'recover' : 'tell');
+}
+export function step(s, input = {}, dt = STEP) {
+  if (s.mode === 'boss') { stepBoss(s, input, dt); return; }
+  if (s.mode !== 'play') return;
+  const stage = STAGES[s.stage], b = s.boat;
+  s.ticks++; s.elapsed += dt; s.remaining = Math.max(0, s.remaining - dt);
+  s.invulnerable = Math.max(0, s.invulnerable - dt); s.messageTime = Math.max(0, s.messageTime - dt);
+  const anchored = !!input.anchor;
+  moveSkiff(s, input, dt);
   // Loss takes precedence over same-tick repair, delivery and chart completion.
   if (s.hull <= 0 || s.remaining <= 0) {
     s.mode = 'lost'; s.reason = s.hull <= 0 ? 'The paper hull gave way.' : 'The storm closed the river.';
@@ -75,8 +138,8 @@ export function step(s, input = {}, dt = STEP) {
         s.cargo = []; signal(s, 'delivery', `${count} ${count === 1 ? 'light' : 'lights'} home. The lighthouse burns brighter.`);
         if (s.saved.length === s.keepers.length) {
           s.score += Math.floor(s.remaining) * 2 + s.hull * 25;
-          s.mode = s.stage === STAGES.length - 1 ? 'won' : 'between';
-          signal(s, 'stage', s.mode === 'won' ? 'Every light is home.' : 'This reach is safe. A new chart awaits.');
+          if (s.stage === STAGES.length - 1) startBoss(s);
+          else { s.mode = 'between'; signal(s, 'stage', 'This reach is safe. A new chart awaits.'); }
         }
       } else if (keeper && s.cargo.length < 2) {
         keeper.status = 'aboard'; s.cargo.push(keeper.id); s.dockTime = 0;

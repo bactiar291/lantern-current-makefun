@@ -162,7 +162,7 @@ try:
         pickup(0,[(210,145)])
         pickup(1,[(570,130),(750,150)])
         sail(590,130)
-        capture('3-depth.jpg')
+        # The third frame is reserved for the live boss encounter.
         home([(570,130),(180,145)])
         pickup(2,[(190,490),(745,490)])
         home([(745,490),(190,490)])
@@ -177,7 +177,27 @@ try:
         pickup(3,[(190,490),(350,490)])
         pickup(2,[(600,490),(815,490)])
         home([(600,490),(190,490)])
-        assert state()['mode']=='won' and state()['totalSaved']==9
+        assert state()['mode']=='bossIntro' and state()['totalSaved']==9
+        page.keyboard.press('Enter'); advance(100)
+        assert state()['mode']=='boss' and focused('river')
+        check('real controls enter the Bell-Maw encounter')
+        boss_captured = False
+        for _ in range(400):
+            s=state()
+            if s['mode'] != 'boss': break
+            if not boss_captured and s['boat']['x'] > 540 and s['boss']['phase'] == 'recover':
+                capture('3-depth.jpg'); boss_captured = True
+            if s['boss']['phase'] == 'recover' and not s['boss']['sealHit'] and s['boat']['x'] > 540 and s['flareCooldown'] == 0 and not s['flareShot']:
+                keys(['f']); advance(50); keys([])
+            else:
+                target_y = 100 if s['boss']['laneY'] > 275 else 450
+                wanted=['ArrowUp'] if s['boat']['y'] > target_y + 10 else ['ArrowDown'] if s['boat']['y'] < target_y - 10 else []
+                if s['boat']['x'] < 600: wanted.append('ArrowRight')
+                elif s['boat']['x'] > 640: wanted.append('ArrowLeft')
+                keys(wanted)
+            advance(100)
+        keys([])
+        assert state()['mode']=='won' and state()['totalSaved']==9, state()
         capture('4-end.jpg')
         assert focused('primary')
         page.keyboard.press('Space'); advance(100)

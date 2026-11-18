@@ -33,9 +33,68 @@ function lighthouse(ctx, saved, time, reduced) {
   for (let y = 269; y < 293; y += 7) { ctx.strokeStyle = INK; ctx.beginPath(); ctx.moveTo(87,y); ctx.lineTo(121,y); ctx.stroke(); }
   text(ctx, 'HOME', 64, 330, 13); text(ctx, 'LIGHTHOUSE', 64, 347, 9);
 }
+function leviathan(ctx, boss, boat, time, reduced) {
+  if (!boss) return;
+  const { x, y, phase, hp, maxHp, phaseTime, laneY } = boss;
+  const pulse = reduced ? 0 : Math.sin(time * 8) * 3;
+  ctx.save();
+  if (phase === 'tell') {
+    ctx.fillStyle = '#9d382833'; ctx.fillRect(424, laneY - 29, 526, 58);
+    ctx.setLineDash([12, 9]); ctx.strokeStyle = '#a23d34'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(430, laneY - 29); ctx.lineTo(948, laneY - 29); ctx.moveTo(430, laneY + 29); ctx.lineTo(948, laneY + 29); ctx.stroke(); ctx.setLineDash([]);
+    text(ctx, 'THE WATER IS DRAWING BREATH', 690, laneY - 38, 11, '#8d312e');
+  }
+  if (phase === 'surge') {
+    const sweep = reduced ? 0 : (1 - phaseTime / .82) * 400;
+    ctx.fillStyle = '#be493a2c'; ctx.fillRect(Math.max(430, x - 320 + sweep), laneY - 35, 270, 70);
+    ctx.strokeStyle = '#a83c34'; ctx.lineWidth = 5; ctx.beginPath();
+    ctx.moveTo(Math.max(430, x - 300 + sweep), laneY - 24); ctx.lineTo(Math.max(430, x - 300 + sweep), laneY + 24); ctx.stroke();
+    text(ctx, 'SURGE', 700, laneY - 42, 14, '#8d312e');
+  }
+  const bob = phase === 'recover' ? -7 : 5 + pulse;
+  ctx.save(); ctx.translate(x, y + bob);
+  const fin = '#244b49', hide = '#315e57', ink = '#173f3a', copper = phase === 'recover' ? '#efbc6d' : '#a85c46';
+  path(ctx, [[-48,8],[-116,-36],[-154,-25],[-127,1],[-166,35],[-111,30],[-51,25]], fin);
+  path(ctx, [[-72,-8],[-99,-55],[-67,-38],[-41,-44],[-26,-13]], hide);
+  path(ctx, [[-55,22],[-91,65],[-42,43],[-9,34]], hide);
+  path(ctx, [[-49,8],[-25,-37],[20,-54],[64,-43],[102,-15],[117,8],[101,34],[61,48],[4,43],[-41,27]], hide, ink, 3);
+  path(ctx, [[-27,-28],[11,-48],[55,-37],[82,-16],[38,-18],[4,-10]], '#55766a', ink, 1.5);
+  path(ctx, [[-34,15],[5,7],[62,8],[99,19],[63,34],[8,31]], '#193e3e', ink, 2);
+  for (let i = 0; i < 5; i++) {
+    const sx = -17 + i * 22;
+    path(ctx, [[sx,-32],[sx+8,-42],[sx+15,-31],[sx+9,-19]], '#d7ca9e', ink, 1.2);
+  }
+  circle(ctx, 55, -15, 7, '#e5b972', ink); circle(ctx, 57, -15, 2.7, '#552d2a');
+  circle(ctx, 92, 2, 4, phase === 'recover' ? '#ffdc8b' : '#be5b49', '#4b3932');
+  ctx.strokeStyle = ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(46,5); ctx.quadraticCurveTo(66,13,83,7); ctx.stroke();
+  for (let i = 0; i < 3; i++) { ctx.strokeStyle = '#7f9a7e'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(8+i*18,30); ctx.quadraticCurveTo(15+i*18,45,6+i*18,54); ctx.stroke(); }
+  ctx.restore();
+  for (let i = 0; i < maxHp; i++) {
+    const bx = x - 43 + i * 22;
+    circle(ctx, bx, y + 67, 7, i < hp ? '#f4d58c' : '#315e5766', i < hp ? '#734b39' : '#315e57');
+    if (i < hp) circle(ctx, bx, y + 67, 2.3, copper);
+  }
+  text(ctx, 'THE BELL-MAW', x, y + 88, 10, '#173f3a');
+  if (phase === 'recover') {
+    ctx.strokeStyle = '#f3d28b'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x + 92, y + 2, 16 + pulse, 0, Math.PI * 2); ctx.stroke();
+    text(ctx, 'F  ·  RESONANCE', x + 92, y - 22, 10, '#6f492b');
+  }
+  ctx.restore();
+}
 export function drawRiver(ctx, s, time, reduced = false) {
   const stage = STAGES[s.stage];
   ctx.clearRect(0,0,950,550); ctx.fillStyle = '#88b5a7'; ctx.fillRect(0,0,950,550);
+  if (s.boss) {
+    ctx.fillStyle = '#315f5a'; ctx.fillRect(0,0,950,550);
+    ctx.save(); ctx.strokeStyle = '#bdd0ad32'; ctx.lineWidth = 2;
+    for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.ellipse(720,275,145+i*42,62+i*18,0,0,Math.PI*2); ctx.stroke(); }
+    for (let i = 0; i < 22; i++) {
+      const x = (i * 173 + 51) % 950, y = (i * 97 + 29) % 550;
+      ctx.strokeStyle = i % 3 ? '#c6c69a66' : '#a4554777'; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(x,y); ctx.quadraticCurveTo(x+10,y-3,x+21,y); ctx.stroke();
+    }
+    text(ctx, 'THE BLACK CURRENT', 475, 35, 11, '#d6d7bb'); ctx.restore();
+  }
   // Deterministic ink marks, not image assets or per-frame randomness.
   for (let i = 0; i < 155; i++) { const x = (i * 137.3) % 950, y = (i * 71.7) % 550; ctx.strokeStyle = i % 3 ? '#6fa394' : '#b3cbb3'; ctx.lineWidth = .7; ctx.beginPath(); ctx.moveTo(x,y); ctx.quadraticCurveTo(x+7,y+3,x+15,y); ctx.stroke(); }
   for (const c of stage.currents) {
@@ -68,6 +127,12 @@ export function drawRiver(ctx, s, time, reduced = false) {
     circle(ctx,k.x,k.y-12,5,INK);path(ctx,[[k.x-7,k.y+6],[k.x-4,k.y-5],[k.x+4,k.y-5],[k.x+8,k.y+6]],COPPER);
     lantern(ctx,k.x+14,k.y-6 + (reduced ? 0 : Math.sin(time*2+k.id)*1.5));
     text(ctx,k.name.toUpperCase(),k.x,k.y+43,10);
+  }
+  leviathan(ctx, s.boss, s.boat, time, reduced);
+  if (s.flareShot) {
+    ctx.save(); ctx.strokeStyle = '#f4d68e99'; ctx.lineWidth = 3; ctx.beginPath();
+    ctx.moveTo(s.flareShot.x - s.flareShot.vx * .045, s.flareShot.y - s.flareShot.vy * .045); ctx.lineTo(s.flareShot.x, s.flareShot.y); ctx.stroke();
+    circle(ctx, s.flareShot.x, s.flareShot.y, 7, '#fff0b8', '#9f573d'); circle(ctx, s.flareShot.x, s.flareShot.y, 2.5, '#fffdf0'); ctx.restore();
   }
   const b=s.boat;
   ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(b.angle);

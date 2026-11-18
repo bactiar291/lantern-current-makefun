@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, startGame, nextStage, step, createClock, snapshot, currentAt, STEP } from '../game/simulation.js';
+import { createGame, startGame, nextStage, startBoss, step, createClock, snapshot, currentAt, STEP } from '../game/simulation.js';
 import { HOME, STAGES } from '../game/stages.js';
 const run = (s, input, seconds) => { for(let i=0;i<Math.round(seconds*60);i++)step(s,input); };
 function sail(s, x, y) {
@@ -24,7 +24,7 @@ test('complete three-chart journey: navigation, rescue, delivery, scoring, win a
   pickup(s,2,[[190,490],[745,490]]);home(s,[[745,490],[190,490]]);assert.equal(s.mode,'between');
   nextStage(s);pickup(s,0,[[200,140]]);pickup(s,1,[[570,130],[765,140]]);
   home(s,[[570,130],[190,140]]);pickup(s,3,[[190,490],[350,490]]);pickup(s,2,[[600,490],[815,490]]);
-  home(s,[[600,490],[190,490]]);assert.equal(s.mode,'won');assert.equal(s.totalSaved,9);assert.ok(s.score>=900);
+  home(s,[[600,490],[190,490]]);assert.equal(s.mode,'bossIntro');assert.equal(s.totalSaved,9);assert.equal(s.boss.hp,5);assert.ok(s.score>=900);
   const final=s.score;run(s,{x:1},5);assert.equal(s.score,final);
   startGame(s);assert.equal(s.score,0);assert.equal(s.stage,0);assert.equal(s.totalSaved,0);assert.equal(s.cargo.length,0);
 });
@@ -45,6 +45,34 @@ test('fixed timestep produces identical full movement journeys at 30, 60 and 144
   assert.deepEqual(journey(30),journey(60));assert.deepEqual(journey(60),journey(144));
 });
 test('catch-up is capped, paused worlds are inert, snapshots are detached',()=>{const s=createGame();startGame(s);const c=createClock(dt=>step(s,{},dt));assert.equal(c.advance(30),6);s.mode='paused';const before=snapshot(s);run(s,{x:1},5);assert.deepEqual(s,before);const copy=snapshot(s);copy.boat.x=900;assert.notEqual(s.boat.x,900);});
+test('the final rescue summons the Bell-Maw; only recovery flares break its five seals',()=>{
+  const s=createGame();startGame(s);s.stage=2;s.saved=s.keepers.map(k=>k.id);s.totalSaved=9;s.mode='play';startBoss(s);
+  s.mode='bossIntro';assert.equal(s.boss.hp,5);s.mode='boss';
+  const before=s.boss.hp;step(s,{flare:true});assert.equal(s.boss.hp,before);
+  s.flareCooldown=0;s.flareShot=null;step(s,{});
+  s.boss.phase='recover';s.boss.phaseTime=1;s.boat.x=s.boss.x-100;s.boat.y=s.boss.y;
+  step(s,{flare:true});step(s,{});
+  for(let tick=0;tick<120&&s.boss.hp===5;tick++) step(s,{});
+  assert.equal(s.boss.hp,4);
+  s.flareCooldown=0;step(s,{flare:true});assert.equal(s.boss.hp,4,'one seal can break in each recovery window');
+  for(let i=0;i<4;i++){
+    const hp=s.boss.hp;
+    while (s.boss.phase === 'recover' && s.mode === 'boss') step(s,{y:-1});
+    while (s.boss.phase !== 'recover' && s.mode === 'boss') step(s,{y:-1});
+    s.flareCooldown=0;step(s,{flare:false});step(s,{flare:true,y:-1});
+    for(let tick=0;tick<400&&s.boss.hp===hp&&s.mode==='boss';tick++) step(s,{y:-1});
+    assert.equal(s.boss.hp,hp-1,`recovery cycle ${i+2} breaks exactly one seal`);
+  }
+  assert.equal(s.mode,'won');assert.equal(s.boss.hp,0);
+});
+test('the Bell-Maw warns, attacks a lane, can be dodged and times out',()=>{
+  const s=createGame();startGame(s);s.stage=2;s.saved=s.keepers.map(k=>k.id);startBoss(s);s.mode='boss';
+  s.boss.laneY=s.boat.y;s.boss.phase='surge';s.boss.phaseTime=.34;s.boss.hitChecked=false;
+  step(s,{});assert.equal(s.hull,3);
+  s.invulnerable=0;s.boat.y=200;s.boss.phase='surge';s.boss.phaseTime=.34;s.boss.laneY=300;s.boss.hitChecked=false;
+  step(s,{});assert.equal(s.hull,3);
+  s.boss.remaining=STEP;step(s,{});assert.equal(s.mode,'lost');
+});
 // Source-only boundary fixtures; browser evidence never uses state setters.
 function finalDelivery(stage) {
   const s=createGame();startGame(s);
@@ -77,7 +105,7 @@ for(const stage of [0,2]) {
   test(`chart ${stage+1}: surviving final delivery still completes`,()=>{
     const s=finalDelivery(stage);s.remaining=2*STEP;
     step(s,{anchor:true});
-    assert.equal(s.mode,stage===2?'won':'between');assert.equal(s.cargo.length,0);
+    assert.equal(s.mode,stage===2?'bossIntro':'between');assert.equal(s.cargo.length,0);
     assert.equal(s.saved.length,s.keepers.length);assert.ok(s.score>0);
   });
 }
